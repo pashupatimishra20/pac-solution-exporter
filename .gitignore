@@ -1,0 +1,9 @@
+node_modules/
+exports/*
+!exports/.gitkeep
+.env
+*.log
+npm-debug.log*
+*.zip
+export-manifest.json
+.DS_Store

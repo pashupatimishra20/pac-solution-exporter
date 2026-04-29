@@ -1,0 +1,20 @@
+{
+  "name": "pac-solution-exporter",
+  "version": "1.0.0",
+  "description": "Local web app for exporting selected Power Platform solutions with PAC CLI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "exporter": "node server.js",
+    "test": "node --check server.js"
+  },
+  "keywords": [
+    "power-platform",
+    "pac",
+    "solutions",
+    "export"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
