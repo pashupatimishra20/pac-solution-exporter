@@ -126,6 +126,27 @@ pac auth list
 
 After sign-in, reload the app. The top-right badge should show the signed-in PAC user.
 
+## PAC CLI Troubleshooting
+
+If PowerShell can run `pac auth list` but the app says `spawn pac.exe ENOENT`, the app server was started from a process that could not see PAC CLI on PATH.
+
+Try this:
+
+```powershell
+where pac
+.\Stop-PAC-Solution-Exporter.cmd
+.\Start-PAC-Solution-Exporter.cmd
+```
+
+If it still fails, start the app with an explicit PAC path:
+
+```powershell
+$env:PAC_PATH="$env:USERPROFILE\.dotnet\tools\pac.exe"
+npm start
+```
+
+The latest app version also refreshes PATH from Windows registry and tries to resolve PAC automatically.
+
 ## Daily Use
 
 1. Double-click the **PAC Solution Exporter** desktop shortcut, or run:

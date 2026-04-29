@@ -1,5 +1,5 @@
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -7,6 +7,8 @@ const crypto = require('crypto');
 const PORT = Number(process.env.PORT || 4141);
 const HOST = process.env.HOST || '127.0.0.1';
 const jobs = new Map();
+let resolvedPacCommand = null;
+let pathRefreshed = false;
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body, null, 2);
@@ -42,12 +44,135 @@ function readBody(req) {
   });
 }
 
+function uniquePathParts(value) {
+  const seen = new Set();
+  return String(value || '')
+    .split(';')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .filter(part => {
+      const key = part.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function refreshWindowsPath() {
+  if (pathRefreshed || process.platform !== 'win32') return;
+  pathRefreshed = true;
+
+  const result = spawnSync('powershell.exe', [
+    '-NoProfile',
+    '-Command',
+    "[Environment]::GetEnvironmentVariable('Path','Machine'); [Environment]::GetEnvironmentVariable('Path','User')",
+  ], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+
+  const registryPath = result.status === 0 ? result.stdout : '';
+  const currentPath = process.env.Path || process.env.PATH || '';
+  const dotnetTools = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, '.dotnet', 'tools') : '';
+  const merged = uniquePathParts([currentPath, registryPath, dotnetTools].filter(Boolean).join(';')).join(';');
+
+  process.env.Path = merged;
+  process.env.PATH = merged;
+}
+
+function commandExists(filePath) {
+  try {
+    return Boolean(filePath) && fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function resolvePacCommand() {
+  if (resolvedPacCommand) return resolvedPacCommand;
+
+  refreshWindowsPath();
+
+  const configured = typeof process.env.PAC_PATH === 'string' ? process.env.PAC_PATH.trim() : '';
+  if (configured) {
+    resolvedPacCommand = {
+      file: configured,
+      shell: /\.(cmd|bat)$/i.test(configured),
+      source: 'PAC_PATH',
+    };
+    return resolvedPacCommand;
+  }
+
+  const candidates = [];
+
+  if (process.platform === 'win32') {
+    const whereResult = spawnSync('where.exe', ['pac'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      env: process.env,
+    });
+    if (whereResult.status === 0) {
+      candidates.push(...whereResult.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean));
+    }
+
+    const commandResult = spawnSync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      '(Get-Command pac -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source)',
+    ], {
+      encoding: 'utf8',
+      windowsHide: true,
+      env: process.env,
+    });
+    if (commandResult.status === 0 && commandResult.stdout.trim()) {
+      candidates.push(commandResult.stdout.trim());
+    }
+
+    if (process.env.USERPROFILE) {
+      candidates.push(path.join(process.env.USERPROFILE, '.dotnet', 'tools', 'pac.exe'));
+    }
+  }
+
+  const found = candidates.find(commandExists);
+  if (found) {
+    resolvedPacCommand = {
+      file: found,
+      shell: /\.(cmd|bat)$/i.test(found),
+      source: 'resolved path',
+    };
+    return resolvedPacCommand;
+  }
+
+  resolvedPacCommand = {
+    file: process.platform === 'win32' ? 'pac' : 'pac',
+    shell: process.platform === 'win32',
+    source: 'PATH',
+  };
+  return resolvedPacCommand;
+}
+
+function pacNotFoundMessage(errorText) {
+  return [
+    'Power Platform CLI was not found by this app process.',
+    '',
+    'Fix options:',
+    '1. Close the app server window, reopen PowerShell, and start the app again.',
+    '2. Run: where pac',
+    '3. If PAC is installed but still not found, set PAC_PATH to the full pac.exe path before starting the app.',
+    '   Example: $env:PAC_PATH="$env:USERPROFILE\\.dotnet\\tools\\pac.exe"; npm start',
+    '',
+    errorText ? `Original error: ${errorText}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 function runPac(args, onLine) {
   return new Promise((resolve) => {
-    const child = spawn(process.env.PAC_PATH || 'pac.exe', args, {
+    const pac = resolvePacCommand();
+    const child = spawn(pac.file, args, {
       cwd: process.cwd(),
-      shell: false,
+      shell: pac.shell,
       windowsHide: true,
+      env: process.env,
     });
 
     let stdout = '';
@@ -65,7 +190,10 @@ function runPac(args, onLine) {
     child.stdout.on('data', chunk => collect(chunk, 'stdout'));
     child.stderr.on('data', chunk => collect(chunk, 'stderr'));
     child.on('error', error => {
-      resolve({ code: 1, stdout, stderr: `${stderr}\n${error.message}`.trim() });
+      const message = error.code === 'ENOENT'
+        ? pacNotFoundMessage(error.message)
+        : `${stderr}\n${error.message}`.trim();
+      resolve({ code: 1, stdout, stderr: message });
     });
     child.on('close', code => {
       resolve({ code: code ?? 1, stdout, stderr });
@@ -1671,6 +1799,17 @@ pac</pre>
       <pre>pac auth create --environment "&lt;environment-url-or-id&gt;"
 pac auth list</pre>
       <p class="muted">After sign-in, reload the app. The top-right auth badge should show your username.</p>
+    </section>
+
+    <section>
+      <h2>If PAC works in PowerShell but not in the app</h2>
+      <p>This usually means the app server was started before Windows PATH could see PAC CLI. Restart the app first:</p>
+      <pre>where pac
+.\\Stop-PAC-Solution-Exporter.cmd
+.\\Start-PAC-Solution-Exporter.cmd</pre>
+      <p>If needed, start with the explicit PAC path:</p>
+      <pre>$env:PAC_PATH="$env:USERPROFILE\\.dotnet\\tools\\pac.exe"
+npm start</pre>
     </section>
 
     <section>
