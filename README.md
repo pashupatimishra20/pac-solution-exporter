@@ -31,9 +31,24 @@ flowchart LR
 - Built-in setup guide at `/setup`.
 - Windows launcher and desktop shortcut helper.
 
-## Quick Start
+## Easiest Setup For First-Time Users
 
-Clone or download this folder, then open PowerShell in the project folder:
+1. Open the repo page in GitHub.
+2. Click **Code** > **Download ZIP**.
+3. Extract the ZIP into a normal folder, for example:
+
+   ```text
+   C:\Tools\pac-solution-exporter
+   ```
+
+4. Open **Windows PowerShell ISE** or **Windows PowerShell**.
+5. Go to the extracted folder:
+
+   ```powershell
+   cd "C:\Tools\pac-solution-exporter"
+   ```
+
+6. Run this setup block:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -42,16 +57,32 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 .\Start-PAC-Solution-Exporter.cmd
 ```
 
-Then open:
+7. The app opens in your browser:
 
 ```text
 http://127.0.0.1:4141
 ```
 
-For the visual setup guide:
+After this, use the **PAC Solution Exporter** desktop shortcut.
+
+For the visual setup guide inside the app:
 
 ```text
 http://127.0.0.1:4141/setup
+```
+
+## Developer Start
+
+If Node.js and PAC CLI are already installed:
+
+```powershell
+npm start
+```
+
+If port `4141` is busy:
+
+```powershell
+$env:PORT='4142'; npm start
 ```
 
 ## Requirements
