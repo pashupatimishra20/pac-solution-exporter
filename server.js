@@ -1680,6 +1680,8 @@ pac auth list</pre>
         <li>Enter the environment URL or ID.</li>
         <li>Click <strong>Load solutions</strong>, select solutions, choose an export folder, then click <strong>Export selected</strong>.</li>
       </ol>
+      <p>Closing the browser does not stop the local server. When finished, run:</p>
+      <pre>.\\Stop-PAC-Solution-Exporter.cmd</pre>
       <p class="ok">The app only lists and exports. It does not import, delete, publish, or add Dataverse components.</p>
     </section>
 

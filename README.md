@@ -65,6 +65,12 @@ http://127.0.0.1:4141
 
 After this, use the **PAC Solution Exporter** desktop shortcut.
 
+Closing the browser tab does not stop the local server. When you are done, stop it with:
+
+```powershell
+.\Stop-PAC-Solution-Exporter.cmd
+```
+
 For the visual setup guide inside the app:
 
 ```text
@@ -136,6 +142,14 @@ After sign-in, reload the app. The top-right badge should show the signed-in PAC
 
 The app writes ZIP files and an `export-manifest.json` file into the selected export folder.
 
+When finished, close the browser and run:
+
+```powershell
+.\Stop-PAC-Solution-Exporter.cmd
+```
+
+The stop script only stops a Node.js process listening on the app port. If another program owns that port, it warns and leaves it running.
+
 ## Commands Used
 
 ```powershell
@@ -153,8 +167,10 @@ pac solution export --environment <environment-url-or-id> --name <solution-uniqu
 | `server.js` | Local HTTP server, PAC wrapper, and browser UI |
 | `package.json` | Start and syntax-check scripts |
 | `Start-PAC-Solution-Exporter.cmd` | Double-click launcher for Windows |
+| `Stop-PAC-Solution-Exporter.cmd` | Stops the local Node.js server |
 | `scripts/Install-Prerequisites.ps1` | Checks or installs Node.js LTS and Power Platform CLI |
 | `scripts/Start-PAC-Solution-Exporter.ps1` | Starts the server and opens the browser |
+| `scripts/Stop-PAC-Solution-Exporter.ps1` | Finds and stops the app server by port |
 | `scripts/Create-Desktop-Shortcut.ps1` | Creates a desktop shortcut |
 | `exports/` | Default export output folder |
 
