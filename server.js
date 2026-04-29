@@ -313,10 +313,10 @@ function parseSolutionList(output) {
 function parseSolutionMetadata(output) {
   const rows = parsePacTable(output, [
     'friendlyname',
+    'modifiedbyuser.fullname',
     'modifiedon',
     'ismanaged',
     'uniquename',
-    'modifiedby',
     'version',
     'solutionid',
   ]);
@@ -327,8 +327,9 @@ function parseSolutionMetadata(output) {
     metadata.set(row.uniquename, {
       friendlyName: row.friendlyname,
       modifiedOn: row.modifiedon,
-      modifiedBy: row.modifiedby,
+      modifiedBy: row['modifiedbyuser.fullname'],
       version: row.version,
+      solutionId: row.solutionid,
       managed: /^true$/i.test(row.ismanaged),
     });
   });
@@ -369,7 +370,10 @@ async function fetchSolutionMetadata(environment) {
     "    <attribute name='version' />",
     "    <attribute name='ismanaged' />",
     "    <attribute name='modifiedon' />",
-    "    <attribute name='modifiedby' />",
+    "    <attribute name='solutionid' />",
+    "    <link-entity name='systemuser' from='systemuserid' to='modifiedby' alias='modifiedbyuser' link-type='outer'>",
+    "      <attribute name='fullname' />",
+    "    </link-entity>",
     "    <order attribute='modifiedon' descending='true' />",
     "  </entity>",
     '</fetch>',
@@ -395,6 +399,29 @@ async function fetchSolutionMetadata(environment) {
     ok: true,
     metadata: parseSolutionMetadata(result.stdout),
   };
+}
+
+function normalizeEnvironmentForMakerUrl(environment) {
+  const value = typeof environment === 'string' ? environment.trim() : '';
+  if (!value) return '';
+
+  try {
+    const url = new URL(value);
+    const environmentMatch = url.pathname.match(/\/environments\/([^/]+)/i);
+    if (environmentMatch) {
+      return decodeURIComponent(environmentMatch[1]);
+    }
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function buildSolutionUrl(environment, solutionId) {
+  const makerEnvironment = normalizeEnvironmentForMakerUrl(environment);
+  const id = typeof solutionId === 'string' ? solutionId.trim().replace(/[{}]/g, '') : '';
+  if (!makerEnvironment || !id) return '';
+  return `https://make.powerapps.com/environments/${encodeURIComponent(makerEnvironment)}/solutions/${encodeURIComponent(id)}`;
 }
 
 function safeFileName(name) {
@@ -436,6 +463,8 @@ async function listSolutions(body) {
         version: solution.version || (item && item.version) || '',
         modifiedOn: item ? item.modifiedOn : '',
         modifiedBy: item ? item.modifiedBy : '',
+        solutionId: item ? item.solutionId : '',
+        solutionUrl: item ? buildSolutionUrl(body.environment, item.solutionId) : '',
       };
     })
     .sort((a, b) => {
@@ -1001,6 +1030,16 @@ function indexHtml() {
       word-break: break-word;
       line-height: 1.35;
     }
+    .solution-link {
+      color: var(--accent-2);
+      text-decoration: none;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .solution-link:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
     .friendly {
       color: var(--muted);
       margin-top: 3px;
@@ -1427,7 +1466,21 @@ function indexHtml() {
         const solutionCell = row.children[2];
         const friendlyName = solution.friendlyName || '';
         solutionCell.title = 'Unique: ' + solution.uniqueName + (friendlyName ? '\\nFriendly: ' + friendlyName : '');
-        solutionCell.querySelector('.name').textContent = solution.uniqueName;
+        const name = solutionCell.querySelector('.name');
+        name.innerHTML = '';
+        if (solution.solutionUrl) {
+          const link = document.createElement('a');
+          link.className = 'solution-link';
+          link.href = solution.solutionUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.title = 'Open solution in maker portal';
+          link.textContent = solution.uniqueName;
+          link.addEventListener('click', event => event.stopPropagation());
+          name.appendChild(link);
+        } else {
+          name.textContent = solution.uniqueName;
+        }
         solutionCell.querySelector('.friendly').textContent = friendlyName;
         solutionCell.querySelector('.ctx-unique').textContent = solution.uniqueName;
         solutionCell.querySelector('.ctx-friendly').textContent = friendlyName || '-';
